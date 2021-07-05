@@ -68,7 +68,7 @@ class UDP_To_OSC_Server(object):
                 while c.end_thread == False:
                     try:
                         bytesPair = self.sock.recvfrom(self.buffer_size)
-                        mess = bytesPair[0].decode("utf-8")
+                        mess = bytesPair[0].decode("utf-8").replace('\n', '').replace('\r', '')
                         addr = bytesPair[1]
                         wx.LogStatus("Received:\t " + addr[0] + ":" + str(addr[1]) + 
                                      " -> \'" + mess + "\'")

@@ -30,7 +30,6 @@ import re
 ''' Determine if an incoiming message is valid '''
 ''' Example of properly formatted message DeviceName(/hog/playback/go/0, 1) '''
 def verifyMessage(text):
-    #pattern = "^([A-Za-z0-9_]+)\( *([/a-zA-Z0-9]+), *(\[(?: ?(?:[0-9]+\.?[0-9]*)|(?:\"[\D\d]*\"),)*(?:(?: ?[0-9]+\.?[0-9]*)|(?:\"[\D\d]*\"))\]|(?:[0-9]+\.?[0-9]*)|(?:\"[\D\d]+\"))\)$"
     simple = "^([A-Za-z0-9_]+)\( *([/a-zA-Z0-9]+), *(\[[\D\d]*\]|[0-9]+\.[0-9]+|[0-9]+|\"[\D\d]+\")\)$"
     try:
         x = re.findall(simple, text)[0]
@@ -45,7 +44,6 @@ def verifyMessage(text):
 
 ''' Parse incoming UDP Messages and return tuple of values '''
 def parseIncoming(text):
-    #text = bMessage.decode("utf-8")
     elems = verifyMessage(text)
     if not elems:
         return 0
