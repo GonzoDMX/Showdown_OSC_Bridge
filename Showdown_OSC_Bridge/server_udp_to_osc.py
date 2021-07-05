@@ -8,14 +8,15 @@ import config as c
 from data_helpers import parseIncoming
 from _datetime import date
 
-
 class UDP_To_OSC_Server(object):
     def __init__(self, *args, **kwargs):
         object.__init__(self, *args, **kwargs)
+
+        wx.LogStatus("Starting Showdown Server @ " + 
+                    c.input_ip + ":" + str(c.input_port))
         
         ''' Set max size of incoming messages '''
         self.buffer_size = 1024
-        
         self.tCount = c.thread_count
         
         ''' Returns a list of available devices '''
@@ -23,10 +24,10 @@ class UDP_To_OSC_Server(object):
         
         ''' If there are no available devices close thread'''        
         if len(self.devList) == 0:
+            wx.LogStatus("No available OSC outputs found")
+            wx.LogStatus("Server startup aborted")
             self.closeThread(False)
         else:
-            wx.LogStatus("Starting Showdown Server @ " + 
-                         c.input_ip + ":" + str(c.input_port))
             ''' Open UDP Server Socket '''
             self.sock = self.openSocket()
             ''' Check if successful '''
@@ -35,12 +36,14 @@ class UDP_To_OSC_Server(object):
                 self.closeThread(False)
             else:
                 wx.LogStatus("Showdown Server Online!")
+                c.server_start = True
                 while c.end_thread == False:
                     try:
                         bytesPair = self.sock.recvfrom(self.buffer_size)
                         mess = bytesPair[0].decode("utf-8")
                         addr = bytesPair[1]
-                        wx.LogStatus("Received from " + addr[0] + ":" + str(addr[1]) + " -> \'" + mess + "\'")
+                        wx.LogStatus("Received:\t " + addr[0] + ":" + str(addr[1]) + 
+                                     " -> \'" + mess + "\'")
                         result = parseIncoming(mess)
                         if result != 0:
                             try:
@@ -48,11 +51,13 @@ class UDP_To_OSC_Server(object):
                                 for count, device in enumerate(self.devList):
                                     if result[0] == device[0]:
                                         index = count
+                                        c.recvd_on = index
                                         break
                                 ''' Send OSC Message '''
                                 self.devList[index][1].send_message(result[1], result[2])
-                                wx.LogStatus("Sending to " + result[0] + " -> " + "\'" +
-                                             result[1] + "\'" + "  args{ " + str(result[2]) + " }" )
+                                wx.LogStatus("Sending:\t " + result[0] + " -> " + "\'" +
+                                             result[1] + "\'" + "  args{ " + str(result[2])
+                                              + " }" )
                             except UnboundLocalError:
                                 wx.LogStatus('Error: \"' + result[0] + '\" does not exist')
                         else:
@@ -62,6 +67,7 @@ class UDP_To_OSC_Server(object):
                     except OSError:
                         self.closeThread(True)
                         break
+                
                 self.closeThread(True)
                 
             

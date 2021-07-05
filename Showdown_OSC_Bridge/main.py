@@ -12,13 +12,16 @@ import socket
 import json
 import re
 import sys
+import os
 import threading
 import webbrowser
 
 import config as c
 
 from dialog_device import DeviceDialog
+from help_dialog import HelpDialog
 from server_udp_to_osc import UDP_To_OSC_Server
+
 
 Disclaimer1 = "Created by: Andrew O\'Shei, andrewoshei.com"
 Disclaimer2 = "If you find this program useful consider donating"
@@ -26,20 +29,29 @@ Disclaimer2 = "If you find this program useful consider donating"
 donate_url = "https://www.paypal.com/donate?hosted_button_id=KYC95YV7JQSS2"
 
 icon_path = "./assets/WO_Icon1.ico"
-help_path = "/assets/Showdown_OSC_Bridge_Help.pdf"
+help_path = "./assets/Showdown_OSC_Bridge_Help_EN.pdf"
+help_file_en = "/Showdown_OSC_Bridge_Help_EN.pdf"
+help_file_fr = "/Showdown_OSC_Bridge_Help_FR.pdf"
 data_path = "./data/device_data.json"
-
 
 """ Class contains the main App Logic """
 class BuildGUI(wx.Frame):
     def __init__(self, *args, **kw):
         super(BuildGUI, self).__init__(*args, **kw)
-        self.timer = wx.Timer(self)
-        self.Bind(wx.EVT_TIMER, self.Set_Output, self.timer)
-        self.timer.Start(1000)
+        
+        ''' Set up timer for managing the Server Thread '''
+        self.thread_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.thread_manager, self.thread_timer)
+        self.thread_timer.Start(1000)
+        
+        ''' Set up timer for managing message received flags '''
+        self.recvd_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self.flag_recvd, self.recvd_timer)
+        self.recvd_timer.Start(150)
+        
         self.Bind(wx.EVT_CLOSE, self.on_close)
-        iconS = wx.Icon(icon_path, wx.BITMAP_TYPE_ICO)
-        self.SetIcon(iconS)
+        icon = wx.Icon(icon_path, wx.BITMAP_TYPE_ICO)
+        self.SetIcon(icon)
         self.InitGUI()
         
     ''' Build the Graphic Interface '''    
@@ -49,6 +61,7 @@ class BuildGUI(wx.Frame):
         self.error = 0
         
         self.log_window = wx.LogWindow(self, "Showdown Log", False)
+        
         
         ''' Create Input IP Address input field '''
         self.Label_IN_ADDR = wx.StaticText(pnl, label='Input IP Address:', pos=(10, 13))
@@ -62,14 +75,17 @@ class BuildGUI(wx.Frame):
         self.text_IN_PORT.Bind(wx.EVT_TEXT, self.validate_in_port)
         self.text_IN_PORT.Bind(wx.EVT_SET_FOCUS, self.focus_port)
 
+        ''' Displays the Server Status '''
+        self.text_STATUS = wx.TextCtrl(pnl, style=wx.TE_CENTRE,size=(60,22), pos=(265,10))
+        self.text_STATUS.Bind(wx.EVT_SET_FOCUS, self.focus_status)
+        self.text_STATUS.SetBackgroundColour(wx.Colour(255,0,0))
+        self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
+        self.text_STATUS.SetValue("Offline")
+
         ''' Create button for asserting changes to the input address '''
-        self.button_SET = wx.Button(pnl, label='Set Input', size=(60,25), pos=(265, 8))
+        self.button_SET = wx.Button(pnl, label='Set Input', size=(60,22), pos=(265, 35))
         self.button_SET.Bind(wx.EVT_BUTTON, self.set_input_address)
         self.button_SET.Disable()
-        
-        ''' Create button for opening message logger '''
-        self.button_LOG = wx.Button(pnl, label='Log', size=(60,25), pos=(265, 35))
-        self.button_LOG.Bind(wx.EVT_BUTTON, self.get_logger)
 
         ''' Create the List Widget for displaying and selecting OSC Devices '''
         self.box_OUT = wx.StaticBox(pnl, label="Output Devices:", size=(325,265), pos=(5, 65))
@@ -98,8 +114,10 @@ class BuildGUI(wx.Frame):
         self.button_DONER.Bind(wx.EVT_BUTTON, self.please_donate)
         self.button_HELP = wx.Button(pnl, label='Help', pos=(125, 335))
         self.button_HELP.Bind(wx.EVT_BUTTON, self.get_help)
-        self.button_QUIT = wx.Button(pnl, label='Quit', pos=(238, 335))
-        self.button_QUIT.Bind(wx.EVT_BUTTON, self.on_close)
+        
+        ''' Create button for opening message logger '''
+        self.button_LOG = wx.Button(pnl, label='Log', pos=(238, 335))
+        self.button_LOG.Bind(wx.EVT_BUTTON, self.get_logger)
         
         ''' Create App watermark '''
         self.static_credit = wx.StaticText(pnl, label=Disclaimer1, pos=(45, 370))
@@ -131,14 +149,41 @@ class BuildGUI(wx.Frame):
             self.error = 0
         e.Skip()
 
+    ''' Rejects selection of status textctrl '''
+    def focus_status(self, e):
+        self.Label_IN_ADDR.SetFocus() # Diverts focus to static text object
+        return
 
-    def Set_Output(self, *args, **kwargs):
+    ''' Manages starting and restarting the Server Thread '''
+    def thread_manager(self, *args, **kwargs):
+        if c.server_start:
+            self.text_STATUS.SetBackgroundColour(wx.Colour(0,200,0))
+            self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
+            c.server_start = False
+            self.text_STATUS.SetValue("Online")
         if c.end_thread == True:
             if not c.thread_server.is_alive():
+                self.text_STATUS.SetBackgroundColour(wx.Colour(255,0,0))
+                self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
+                self.text_STATUS.SetValue("Offline")
                 c.end_thread = False
                 c.thread_server = Launch_Server_Thread()
         return
 
+
+    ''' Creates a visual marker when a specific devices has received a message '''
+    def flag_recvd(self, e):
+        ''' Turn flag on '''
+        if c.recvd_off > -1:
+            self.list_DEVICES.SetItem(c.recvd_off, 3, "")
+            c.recvd_off = -1
+        ''' Turn flag off '''
+        if c.recvd_on > -1:
+            self.list_DEVICES.SetItem(c.recvd_on, 3, "●")
+            c.recvd_off = c.recvd_on
+            c.recvd_on = -1
+        return
+        
         
     ''' Populates Device dictionary and ListCtrl '''
     def populate_devices(self):
@@ -156,13 +201,18 @@ class BuildGUI(wx.Frame):
                     self.list_DEVICES.SetItem(count, 2, c.config_dictionary["devices"][key]["port"])
                 c.thread_server = Launch_Server_Thread()
         except Exception as e:
+            wx.LogStatus("device_data.json not found")
             c.config_dictionary["input"]["address"] = c.input_ip
             c.config_dictionary["input"]["port"] = c.input_port
             self.text_IN_ADDR.SetValue(c.input_ip)
             self.text_IN_PORT.SetValue(c.input_port)
-            self.save_device_dict()
-            
-
+            wx.LogStatus("Writing device_data.json...")
+            try:
+                self.save_device_dict()
+                wx.LogStatus("Success!")
+            except Exception as e:
+                wx.LogStatus("Failed!\t" + str(e))
+                
     ''' Wipes device list and repopulates '''
     def update_device_list(self):
         self.list_DEVICES.DeleteAllItems()
@@ -348,8 +398,16 @@ class BuildGUI(wx.Frame):
 
     ''' Displays app user manual '''
     def get_help(self, e):
-        webbrowser.open_new(help_path)
+        with HelpDialog(self, "Help") as dialog:
+            dr = os.path.dirname(os.path.realpath(help_path))
+            id = dialog.ShowModal()
+            if id == c.ID_ENGLISH:
+                os.startfile(dr + help_file_en)
+            if id == c.ID_FRANCAIS:
+                os.startfile(dr + help_file_fr)
 
+        
+        
     ''' Triggers on close app event '''
     def on_close(self, event):
         Quit_Program()

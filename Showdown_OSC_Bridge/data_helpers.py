@@ -4,9 +4,10 @@ import re
 ''' Determine if an incoiming message is valid '''
 ''' Example of properly formatted message DeviceName(/hog/playback/go/0, 1) '''
 def verifyMessage(text):
-    pattern = "^([A-Za-z0-9_]+)\( *([/a-zA-Z0-9]+), *(\[{1}(?: ?(?:[0-9]+\.?[0-9]*){1},{1})*(?: ?[0-9]+\.?[0-9]*)\]{1}|(?:[0-9]+\.?[0-9]*))\)$"
+    #pattern = "^([A-Za-z0-9_]+)\( *([/a-zA-Z0-9]+), *(\[(?: ?(?:[0-9]+\.?[0-9]*)|(?:\"[\D\d]*\"),)*(?:(?: ?[0-9]+\.?[0-9]*)|(?:\"[\D\d]*\"))\]|(?:[0-9]+\.?[0-9]*)|(?:\"[\D\d]+\"))\)$"
+    simple = "^([A-Za-z0-9_]+)\( *([/a-zA-Z0-9]+), *(\[[\D\d]*\]|[0-9]+\.[0-9]+|[0-9]+|\"[\D\d]+\")\)$"
     try:
-        x = re.findall(pattern, text)[0]
+        x = re.findall(simple, text)[0]
         if len(x) == 3:
             return x
         else:
@@ -27,22 +28,31 @@ def parseIncoming(text):
     else:
         oscName = elems[0]   # Get the device name
         oscAddr = elems[1]      # Get the Osc Parameter Address String
-        if '[' in elems[2]:     # If the argument is an array
-            pattern = "[0-9]+\.?[0-9]*"
-            xArg = re.findall(pattern, elems[2])
+        args = elems[2]
+        print("Args: " + args)
+        if args[0] == '[' and args[-1] == ']':     # If the argument is an array
             oscArgs = list()
-            for vals in xArg:
-                oscArgs.append(strIntFloat(vals))  # Create list from the array argument
+            args = args[1:-1].split(',')
+            for arg in args:
+                arg = arg.lstrip().rstrip()
+                arg = strIntFloat(arg)
+                if arg is not None:
+                    oscArgs.append(arg)
+            print(oscArgs)
         else:
-            oscArgs = strIntFloat(elems[2]) # Return argument as Int or FLoat
+            oscArgs = strIntFloat(args) # Return argument as Int or FLoat
         return (oscName, oscAddr, oscArgs)
         
         
         
-""" Receive a value represented as a string and convert to float or int """        
+""" Receives a string and returns it as its correct type """        
 def strIntFloat(x):
-    if '.' in x:
-        return float(x)   # Gets argument if it is a float
+    if x[0] == '\"' and x[-1] == '\"':
+        return x[1:-1]  # Item is a string return as string
+    elif '.' in x:
+        return float(x) # Gets argument if it is a float
+    elif x.isnumeric():
+        return int(x)   # Gets argument if it is an integer
     else:
-        return int(x) # Gets argument if it is an integer
+        return None
         
