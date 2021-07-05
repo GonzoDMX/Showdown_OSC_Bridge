@@ -1,11 +1,32 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-"""
-    Showdown OSC Bridge
-    Created by: Andrew O'Shei, andrewoshei.com
-    Date: July 4, 2021
 
 """
+    Showdown OSC
+    Created by: Andrew O'Shei, andrewoshei.com
+    Date: July 4, 2021
+    
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+
+"""
+	Showdown_OSC.py contains the main program loop and a
+	class for constructiong the main GUI in Showdown OSC
+	
+"""
+
 
 import wx
 import socket
@@ -319,8 +340,6 @@ class BuildGUI(wx.Frame):
                 c.end_thread = True
                 wx.LogStatus("New device added: " + c.dialog_name + "/" + 
                              c.dialog_addr + ":" + c.dialog_port)
-            else:
-                print("Exit Cancel")
 
 
     """ Opens a dialog for editing an OSC Device """
@@ -368,8 +387,6 @@ class BuildGUI(wx.Frame):
                         wx.LogStatus("Edited device: " + c.dialog_name + "/" + 
                              c.dialog_addr + ":" + c.dialog_port)
                         c.end_thread = True
-                    else:
-                        print("Exit Cancel")
         self.button_REMOVE.Disable()
         self.button_EDIT.Disable()
 
@@ -387,14 +404,12 @@ class BuildGUI(wx.Frame):
             json_file.close()
 
     def get_logger(self, e):
-        #LoggerDialog(self, "Message Logger").Show()
         self.log_window.Show()
 
 
     ''' Redirects to paypal donation '''
     def please_donate(self, e):
         webbrowser.open( donate_url, new=2)
-        print("Please donate")
 
     ''' Displays app user manual '''
     def get_help(self, e):
@@ -426,7 +441,6 @@ def Launch_Server_Thread():
 
 ''' Executes on quitting the program '''
 def Quit_Program():
-    print("Ending program")
     c.end_thread = True
     sys.exit()
     
