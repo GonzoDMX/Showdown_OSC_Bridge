@@ -30,6 +30,7 @@ import re
 import socket
 
 import config as c
+from data_helpers import CheckIP
 
 class DeviceDialog(wx.Dialog): 
     def __init__(self, parent, title): 
@@ -52,6 +53,7 @@ class DeviceDialog(wx.Dialog):
         self.text_IP_ADDR = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(90, 35))
         self.text_IP_ADDR.Bind(wx.EVT_TEXT, self.set_ipaddr)
         self.text_IP_ADDR.Bind(wx.EVT_SET_FOCUS, self.focus_addr)
+        self.text_IP_ADDR.SetMaxLength(15)
 
         ''' Creat the device port entry field'''
         self.label_PORT = wx.StaticText(panel, label='Input PORT:', pos=(10, 63))
@@ -109,27 +111,7 @@ class DeviceDialog(wx.Dialog):
     def set_ipaddr(self, e):
         addr = self.text_IP_ADDR.Value
         index = self.text_IP_ADDR.GetInsertionPoint()
-        addr = addr.replace("..", ".")
-        val = re.findall("\D", addr)
-        for vals in val:
-            if vals != '.':
-                addr = addr.replace(vals, '')
-                index -= 1
-        val = re.findall("[0-9]+", addr)
-        addr = ""
-        for count, vals in enumerate(val):
-            if vals == "00" or vals == "000":
-                vals = "0"
-            if len(vals) > 1 and vals[0] == "0":
-                vals = vals[1:]
-                index -= 1
-            while len(vals) > 3 or int(vals) > 255:
-                vals = vals[:-1]
-            if count == 3:
-                addr += vals
-                break
-            else:
-                addr += vals + '.'
+        addr, index = CheckIP(addr, index)
         c.dialog_addr = addr
         self.text_IP_ADDR.ChangeValue(addr) # Set value w/o triggering event
         self.text_IP_ADDR.SetInsertionPoint(index)  # Reset the inmsertion point to end

@@ -27,7 +27,6 @@
 	
 """
 
-
 import wx
 import socket
 import json
@@ -42,6 +41,8 @@ import config as c
 from dialog_device import DeviceDialog
 from help_dialog import HelpDialog
 from server_udp_to_osc import UDP_To_OSC_Server
+from data_helpers import CheckIP
+from config import getRecOnList
 
 
 Disclaimer1 = "Created by: Andrew O\'Shei, andrewoshei.com"
@@ -49,11 +50,10 @@ Disclaimer2 = "If you find this program useful consider donating"
 
 donate_url = "https://www.paypal.com/donate?hosted_button_id=KYC95YV7JQSS2"
 
-icon_path = "./assets/WO_Icon1.ico"
-help_path = "./assets/Showdown_OSC_Bridge_Help_EN.pdf"
-help_file_en = "/Showdown_OSC_Bridge_Help_EN.pdf"
-help_file_fr = "/Showdown_OSC_Bridge_Help_FR.pdf"
-data_path = "./data/device_data.json"
+icon_path = "./WO_Icon1.ico"
+help_file_en = "Showdown_OSC_Bridge_Help_EN.pdf"
+help_file_fr = "Showdown_OSC_Bridge_Help_FR.pdf"
+data_path = "./device_data.json"
 
 """ Class contains the main App Logic """
 class BuildGUI(wx.Frame):
@@ -154,58 +154,6 @@ class BuildGUI(wx.Frame):
         self.populate_devices()
 
 
-    ''' Releases error signal on text inputs '''
-    def focus_addr(self, e):
-        if self.error == 1:
-            self.text_IN_ADDR.SetValue(c.input_ip)
-            self.text_IN_ADDR.SetBackgroundColour(wx.Colour(255,255,255))
-            self.Refresh()
-            self.error = 0
-        e.Skip()
-    def focus_port(self, e):
-        if self.error == 2:
-            self.text_IN_PORT.SetValue(c.input_port)
-            self.text_IN_PORT.SetBackgroundColour(wx.Colour(255,255,255))
-            self.Refresh()
-            self.error = 0
-        e.Skip()
-
-    ''' Rejects selection of status textctrl '''
-    def focus_status(self, e):
-        self.Label_IN_ADDR.SetFocus() # Diverts focus to static text object
-        return
-
-    ''' Manages starting and restarting the Server Thread '''
-    def thread_manager(self, *args, **kwargs):
-        if c.server_start:
-            self.text_STATUS.SetBackgroundColour(wx.Colour(0,200,0))
-            self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
-            c.server_start = False
-            self.text_STATUS.SetValue("Online")
-        if c.end_thread == True:
-            if not c.thread_server.is_alive():
-                self.text_STATUS.SetBackgroundColour(wx.Colour(255,0,0))
-                self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
-                self.text_STATUS.SetValue("Offline")
-                c.end_thread = False
-                c.thread_server = Launch_Server_Thread()
-        return
-
-
-    ''' Creates a visual marker when a specific devices has received a message '''
-    def flag_recvd(self, e):
-        ''' Turn flag on '''
-        if c.recvd_off > -1:
-            self.list_DEVICES.SetItem(c.recvd_off, 3, "")
-            c.recvd_off = -1
-        ''' Turn flag off '''
-        if c.recvd_on > -1:
-            self.list_DEVICES.SetItem(c.recvd_on, 3, "●")
-            c.recvd_off = c.recvd_on
-            c.recvd_on = -1
-        return
-        
-        
     ''' Populates Device dictionary and ListCtrl '''
     def populate_devices(self):
         try:
@@ -220,6 +168,7 @@ class BuildGUI(wx.Frame):
                     self.list_DEVICES.InsertItem(count, key)
                     self.list_DEVICES.SetItem(count, 1, c.config_dictionary["devices"][key]["address"])
                     self.list_DEVICES.SetItem(count, 2, c.config_dictionary["devices"][key]["port"])
+                    c.device_count += 1
                 c.thread_server = Launch_Server_Thread()
         except Exception as e:
             wx.LogStatus("device_data.json not found")
@@ -233,44 +182,81 @@ class BuildGUI(wx.Frame):
                 wx.LogStatus("Success!")
             except Exception as e:
                 wx.LogStatus("Failed!\t" + str(e))
+
+
+    ''' Releases error signal on text inputs '''
+    def focus_addr(self, e):
+        if self.error == 1:
+            in_addr, _ = c.getInputAddress()
+            self.text_IN_ADDR.SetValue(in_addr)
+            self.text_IN_ADDR.SetBackgroundColour(wx.Colour(255,255,255))
+            self.Refresh()
+            self.error = 0
+        e.Skip()
+    def focus_port(self, e):
+        if self.error == 2:
+            _, in_port = c.getInputAddress()
+            self.text_IN_PORT.SetValue(in_port)
+            self.text_IN_PORT.SetBackgroundColour(wx.Colour(255,255,255))
+            self.Refresh()
+            self.error = 0
+        e.Skip()
+
+    ''' Rejects selection of status textctrl '''
+    def focus_status(self, e):
+        self.Label_IN_ADDR.SetFocus() # Diverts focus to static text object
+        return
+
+    ''' Manages starting and restarting the Server Thread '''
+    def thread_manager(self, *args, **kwargs):
+        if c.getServerStart():
+            self.text_STATUS.SetBackgroundColour(wx.Colour(0,200,0))
+            self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
+            c.setServerStart(False)
+            self.text_STATUS.SetValue("Online")
+        if c.getServerEnd():
+            if not c.thread_server.is_alive():
+                self.text_STATUS.SetBackgroundColour(wx.Colour(255,0,0))
+                self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
+                self.text_STATUS.SetValue("Offline")
+                c.setServerEnd(False)
+                c.thread_server = Launch_Server_Thread()
+        return
+
+
+    ''' Creates a visual marker when a specific devices has received a message '''
+    def flag_recvd(self, e):
+        r_on = c.getRecOnList()
+        ''' Turn flag on '''
+        while c.recvd_off:
+            self.list_DEVICES.SetItem(c.recvd_off.pop(), 3, "")
+        ''' Turn flag off '''
+        while r_on:
+            i = r_on.pop()
+            self.list_DEVICES.SetItem(i, 3, "●")
+            c.recvd_off.append(i)
+        return
+        
                 
     ''' Wipes device list and repopulates '''
     def update_device_list(self):
         self.list_DEVICES.DeleteAllItems()
-        for count, key in enumerate(c.config_dictionary["devices"]):
+        devDict = c.getDictDevices()
+        for count, key in enumerate(devDict):
             self.list_DEVICES.InsertItem(count, key)
-            self.list_DEVICES.SetItem(count, 1, c.config_dictionary["devices"][key]["address"])
-            self.list_DEVICES.SetItem(count, 2, c.config_dictionary["devices"][key]["port"])
+            self.list_DEVICES.SetItem(count, 1, devDict[key]["address"])
+            self.list_DEVICES.SetItem(count, 2, devDict[key]["port"])
 
 
     ''' Validates IP Address value is valid'''
     def validate_in_ipaddr(self, e):
         addr = self.text_IN_ADDR.Value
         index = self.text_IN_ADDR.GetInsertionPoint()
-        addr = addr.replace("..", ".")
-        val = re.findall("\D", addr)
-        for vals in val:
-            if vals != '.':
-                addr = addr.replace(vals, '')
-                index -= 1
-        val = re.findall("[0-9]+", addr)
-        addr = ""
-        for count, vals in enumerate(val):
-            if vals == "00" or vals == "000":
-                vals = "0"
-            if len(vals) > 1 and vals[0] == "0":
-                vals = vals[1:]
-                index -= 1
-            while len(vals) > 3 or int(vals) > 255:
-                vals = vals[:-1]
-            if count == 3:
-                addr += vals
-                break
-            else:
-                addr += vals + '.'
-        self.text_IN_ADDR.ChangeValue(addr) # Set value w/o triggering event
+        addr, index = CheckIP(addr, index)
+        self.text_IN_ADDR.ChangeValue(addr)         # Set value w/o triggering event
         self.text_IN_ADDR.SetInsertionPoint(index)  # Reset the inmsertion point to end
-        if addr != c.input_ip:
+        in_addr, _ = c.getInputAddress()
+        if addr != in_addr:
             self.button_SET.Enable()
         else:
             self.button_SET.Disable()
@@ -278,18 +264,19 @@ class BuildGUI(wx.Frame):
 
     ''' Validates Port Value is valid '''
     def validate_in_port(self, e):
-        port = self.text_IN_PORT.Value  # Get the textctrl string
-        val = re.findall("\D", port)    # Get a list of all invalid characters
-        for vals in val:                # If there are any remove them
+        port = self.text_IN_PORT.Value              # Get the textctrl string
+        val = re.findall("\D", port)                # Get a list of all invalid characters
+        for vals in val:                            # If there are any remove them
             port = port.replace(vals, '')
         index = self.text_IN_PORT.GetInsertionPoint()
         if port:
-            if int(port) > 65535:       # If over max value block additional nums
+            if int(port) > 65535:                   # If over max value block additional nums
                 port = port[0 : index-1 : ] + port[index : :]
                 index -= 1
-        self.text_IN_PORT.ChangeValue(port) # Set value w/o triggering event
+        self.text_IN_PORT.ChangeValue(port)         # Set value w/o triggering event
         self.text_IN_PORT.SetInsertionPoint(index)  # Reset the inmsertion point to end
-        if port != c.input_port:
+        _, in_port = c.getInputAddress()
+        if port != in_port:
             self.button_SET.Enable()
         else:
             self.button_SET.Disable()
@@ -302,13 +289,11 @@ class BuildGUI(wx.Frame):
         if port:
             try:
                 socket.inet_pton(socket.AF_INET, addr)
-                c.config_dictionary["input"]["address"] = addr
-                c.config_dictionary["input"]["port"] = port
-                c.input_ip = addr
-                c.input_port = port
+                c.setDictInputs(addr, port)
+                c.setInputAddress(addr, port)
                 self.save_device_dict()
                 self.button_SET.Disable()
-                c.end_thread = True
+                c.setServerEnd(True)
             except socket.error:
                 self.text_IN_ADDR.SetBackgroundColour(wx.Colour(255,0,0))
                 self.Refresh()
@@ -335,9 +320,9 @@ class BuildGUI(wx.Frame):
         c.dialog_mode = True
         with DeviceDialog(self, "Add OSC Device") as dialog:
             if dialog.ShowModal() == wx.ID_OK:
-                self.update_device_dict()
+                self.add_device_dict()
                 self.update_device_list()
-                c.end_thread = True
+                c.setServerEnd(True)
                 wx.LogStatus("New device added: " + c.dialog_name + "/" + 
                              c.dialog_addr + ":" + c.dialog_port)
 
@@ -355,13 +340,18 @@ class BuildGUI(wx.Frame):
                     wx.YES_NO|wx.NO_DEFAULT|wx.ICON_WARNING
                     ).ShowModal()
                 if dialog_remove == wx.ID_YES:
-                    del c.config_dictionary["devices"][name]["address"]
-                    del c.config_dictionary["devices"][name]["port"]
-                    del c.config_dictionary["devices"][name]
+                    del_id = c.getDeviceId(name)
+                    c.delDevice(name)
+                    if del_id < c.device_count:
+                        c.reorderDevice(del_id)
+                        for dev in c.config_dictionary["devices"]:
+                            if c.config_dictionary["devices"][dev]["id"] > del_id:
+                                c.config_dictionary["devices"][dev]["id"] -= 1
+                    c.device_count -= 1
                     self.save_device_dict()
                     self.update_device_list()
                     wx.LogStatus("Device removed: " + name)
-                    c.end_thread = True
+                    c.setServerEnd(True)
                 else:
                     return
         self.button_REMOVE.Disable()
@@ -377,23 +367,27 @@ class BuildGUI(wx.Frame):
             if self.list_DEVICES.IsSelected(index):
                 name = self.list_DEVICES.GetItemText(index)
                 c.dialog_name = name
-                c.dialog_addr = c.config_dictionary["devices"][name]["address"]
-                c.dialog_port = c.config_dictionary["devices"][name]["port"]
-                
+                c.dialog_addr, c.dialog_port = c.getDeviceAddress(name)
                 with DeviceDialog(self, "Edit OSC Device") as dialog:
                     if dialog.ShowModal() == wx.ID_OK:
                         self.update_device_dict()
                         self.update_device_list()
                         wx.LogStatus("Edited device: " + c.dialog_name + "/" + 
                              c.dialog_addr + ":" + c.dialog_port)
-                        c.end_thread = True
+                        c.setServerEnd(True)
         self.button_REMOVE.Disable()
         self.button_EDIT.Disable()
 
 
     ''' Add new device to dictionary '''
+    def add_device_dict(self):
+        c.device_count += 1
+        c.addDevice(c.dialog_name, c.dialog_addr, c.dialog_port)
+        self.save_device_dict()
+
+    ''' Edit new device to dictionary '''
     def update_device_dict(self):
-        c.config_dictionary["devices"][c.dialog_name] = { "address": c.dialog_addr, "port": c.dialog_port}
+        c.updateDevice(c.dialog_name, c.dialog_addr, c.dialog_port)
         self.save_device_dict()
         
         
@@ -414,12 +408,11 @@ class BuildGUI(wx.Frame):
     ''' Displays app user manual '''
     def get_help(self, e):
         with HelpDialog(self, "Help") as dialog:
-            dr = os.path.dirname(os.path.realpath(help_path))
-            id = dialog.ShowModal()
-            if id == c.ID_ENGLISH:
-                os.startfile(dr + help_file_en)
-            if id == c.ID_FRANCAIS:
-                os.startfile(dr + help_file_fr)
+            dialog_id = dialog.ShowModal()
+            if dialog_id == c.ID_ENGLISH:
+                os.startfile(help_file_en)
+            if dialog_id == c.ID_FRANCAIS:
+                os.startfile(help_file_fr)
 
         
         
@@ -429,11 +422,8 @@ class BuildGUI(wx.Frame):
         
 
 
-
-
 ''' Launch UDP Server as a thread '''
 def Launch_Server_Thread():
-    c.thread_count += 1
     Thread = threading.Thread(target=UDP_To_OSC_Server)
     Thread.start()
     return Thread

@@ -27,6 +27,7 @@
 
 import re
 
+
 ''' Determine if an incoiming message is valid '''
 ''' Example of properly formatted message DeviceName(/hog/playback/go/0, 1) '''
 def verifyMessage(text):
@@ -75,4 +76,21 @@ def strIntFloat(x):
         return int(x)   # Gets argument if it is an integer
     else:
         return None
-        
+
+
+
+def CheckIP(addr, index):
+    iCount = len(addr)
+    addr = re.sub(r"[^0-9.,]", '', addr)
+    if len(addr) < iCount:
+        index -= 1
+    addr = addr.replace(',', '.')
+    ''' Check how many points there are '''
+    p = addr.count('.')
+    if p > 3:       # If there are too many remove the last
+        addr = addr[:index-1] + addr[index:]
+        index -= 1
+
+    return addr, index
+    
+    

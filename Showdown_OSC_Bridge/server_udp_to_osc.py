@@ -25,30 +25,27 @@
 
 """
 
-
 import wx
 import socket
-import data_helpers
-from datetime import datetime
 from pythonosc import udp_client
 
 import config as c
 from data_helpers import parseIncoming
-from _datetime import date
 
 class UDP_To_OSC_Server(object):
     def __init__(self, *args, **kwargs):
         object.__init__(self, *args, **kwargs)
-
+        
+        in_addr, in_port =c.getInputAddress()               # Thread lock input_ip, input_port
         wx.LogStatus("Starting Showdown Server @ " + 
-                    c.input_ip + ":" + str(c.input_port))
+                    in_addr + ":" + str(in_port))           
         
         ''' Set max size of incoming messages '''
         self.buffer_size = 1024
-        self.tCount = c.thread_count
         
         ''' Returns a list of available devices '''
-        self.devList = self.getDevList()
+        self.devices = c.getDictDevices()                   # Thread lock config_dictionary
+        self.devList = self.getDevList(self.devices)
         
         ''' If there are no available devices close thread'''        
         if len(self.devList) == 0:
@@ -57,15 +54,15 @@ class UDP_To_OSC_Server(object):
             self.closeThread(False)
         else:
             ''' Open UDP Server Socket '''
-            self.sock = self.openSocket()
+            self.sock = self.openSocket(in_addr, in_port)
             ''' Check if successful '''
             if self.sock == 0:
                 wx.LogStatus("Error: Failed to open socket")
                 self.closeThread(False)
             else:
+                c.setServerStart(True)                        # Thread lock server_start
                 wx.LogStatus("Showdown Server Online!")
-                c.server_start = True
-                while c.end_thread == False:
+                while c.getServerEnd() == False:              # Thread lock end_thread
                     try:
                         bytesPair = self.sock.recvfrom(self.buffer_size)
                         mess = bytesPair[0].decode("utf-8").replace('\n', '').replace('\r', '')
@@ -75,18 +72,15 @@ class UDP_To_OSC_Server(object):
                         result = parseIncoming(mess)
                         if result != 0:
                             try:
-                                ''' Get index of target device '''
-                                for count, device in enumerate(self.devList):
-                                    if result[0] == device[0]:
-                                        index = count
-                                        c.recvd_on = index
-                                        break
-                                ''' Send OSC Message '''
+                                ''' Get index of target device '''                                
+                                index = self.devices[result[0]]["id"]-1
                                 self.devList[index][1].send_message(result[1], result[2])
+                                c.appendRecOnList(index)    # Thread lock recvd_on 
                                 wx.LogStatus("Sending:\t " + result[0] + " -> " + "\'" +
-                                             result[1] + "\'" + "  args{ " + str(result[2])
-                                              + " }" )
-                            except UnboundLocalError:
+                                            result[1] + "\'" + "  args{ " + str(result[2]) 
+                                            + " }" )
+                                
+                            except KeyError:
                                 wx.LogStatus('Error: \"' + result[0] + '\" does not exist')
                         else:
                             wx.LogStatus("Error: Invalid message received")
@@ -100,20 +94,19 @@ class UDP_To_OSC_Server(object):
                 
             
     ''' Get the Output Devices and create a list of (key, client Interface) pairs '''
-    def getDevList(self):
-        devDict = c.config_dictionary["devices"]
+    def getDevList(self, devices):
         devList = list()
-        for key in devDict:
-            client = udp_client.SimpleUDPClient(devDict[key]["address"], int(devDict[key]["port"]))
+        for key in devices:
+            client = udp_client.SimpleUDPClient(devices[key]["address"], int(devices[key]["port"]))
             devList += [(key, client)]
         return devList
             
     
     ''' Open a UDP Socket '''        
-    def openSocket(self):
+    def openSocket(self, ip, port):
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.bind((c.input_ip, int(c.input_port)))
+            sock.bind((ip, int(port)))
             sock.setblocking(0)
             sock.settimeout(1.0)
             return sock
