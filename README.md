@@ -17,9 +17,9 @@ Condition-> Device_2 is linked to Device_1
 ```
 If you wish to repeat messages across more than two devices you can chain links.
 ```
-Condition-> Device_2 linked with Device_1
-Condition-> Device_3 linked with Device_2
-Condition-> Device_4 linked with Device_3
+Condition-> Device_2 is linked with Device_1
+Condition-> Device_3 is linked with Device_2
+Condition-> Device_4 is linked with Device_3
    Result-> All messages received by Device_1 will be repeated on Device_2, Device_3 and Device_4
 ```
 
