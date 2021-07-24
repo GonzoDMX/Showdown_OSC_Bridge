@@ -5,7 +5,8 @@ I created the app when I found myself in a situation where I couldn't interface 
 
 ## Feature Notice:
 **Linking:**
-The Showdown OSC app now allows linking between Output (OSC) Devices. Please note, this change is not yet reflected in the help documents.
+The Showdown OSC app now allows linking between Output (OSC) Devices. Please note, this change is not yet reflected in the help documents. Devices can be linked with the link device dropdown menu when adding a device with the **Add** button or editing a device with the **Edit** button.
+Note: Removing a device with the **Remove** button will break its links.
 
 *So what is linking and how does it work ?*
 
