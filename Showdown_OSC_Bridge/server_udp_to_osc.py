@@ -1,30 +1,3 @@
-"""
-	Created by: Andrew O'Shei
-	Date: July 5, 2021
-
- 	This file is part of Showdown OSC.
-
-    Showdown OSC is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
-
-    Foobar is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
-
-"""
-
-"""
-	server_udp_to_osc.py contains a class for building the UDP server
-	and OSC clients that form the core functionality of Showdown OSC
-
-"""
-
 import wx
 import socket
 from pythonosc import udp_client
@@ -57,7 +30,7 @@ class UDP_To_OSC_Server(object):
             self.sock = self.openSocket(in_addr, in_port)
             ''' Check if successful '''
             if self.sock == 0:
-                wx.LogStatus("Error: Failed to open socket")
+                wx.LogStatus("Error: \t Failed to open socket")
                 self.closeThread(False)
             else:
                 c.setServerStart(True)                        # Thread lock server_start
@@ -71,19 +44,29 @@ class UDP_To_OSC_Server(object):
                                      " -> \'" + mess + "\'")
                         result = parseIncoming(mess)
                         if result != 0:
+                            name = result[0]
+                            log_flag = "Sending:"
                             try:
-                                ''' Get index of target device '''                                
-                                index = self.devices[result[0]]["id"]-1
-                                self.devList[index][1].send_message(result[1], result[2])
-                                c.appendRecOnList(index)    # Thread lock recvd_on 
-                                wx.LogStatus("Sending:\t " + result[0] + " -> " + "\'" +
-                                            result[1] + "\'" + "  args{ " + str(result[2]) 
-                                            + " }" )
-                                
+                                while True:
+                                    ''' Get index of target device '''
+                                    index = self.devices[name]["id"]-1
+                                    self.devList[index][1].send_message(result[1], result[2])
+                                    c.appendRecOnList(index)    # Thread lock recvd_on 
+                                    wx.LogStatus(log_flag + "\t " + name + " -> " + "\'" +
+                                                result[1] + "\'" + "  args{ " + str(result[2])
+                                                + " }" )
+                                    if result[3]:
+                                        name = self.devices[name]["linked"]
+                                        log_flag = "Linking:"
+                                        if not name:
+                                            break
+                                    else:
+                                        wx.LogStatus("Info:\t Link Override")
+                                        break
                             except KeyError:
-                                wx.LogStatus('Error: \"' + result[0] + '\" does not exist')
+                                wx.LogStatus('Error: \t \"' + name + '\" does not exist')
                         else:
-                            wx.LogStatus("Error: Invalid message received")
+                            wx.LogStatus("Error: \t Invalid message received")
                     except socket.timeout:
                         continue
                     except OSError:

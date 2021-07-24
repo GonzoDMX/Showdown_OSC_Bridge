@@ -1,30 +1,3 @@
-"""
-	Created by: Andrew O'Shei
-	Date: July 5, 2021
-
- 	This file is part of Showdown OSC.
-
-    Showdown OSC is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
-
-    Foobar is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
-
-"""
-
-"""
-	dialog_device.py contains a class for building
-	the add and edit device dialog window Showdown OSC
-
-"""
-
 import wx
 import re
 import socket
@@ -34,13 +7,21 @@ from data_helpers import CheckIP
 
 class DeviceDialog(wx.Dialog): 
     def __init__(self, parent, title): 
-        super(DeviceDialog, self).__init__(parent, title = title, size = (270,160)) 
+        super(DeviceDialog, self).__init__(parent, title = title, size = (270,185)) 
         panel = wx.Panel(self)
         
         self.error = 0  # Input Error flag
         
+        self.link_choices = ["Not Linked"]
+        if not c.dialog_mode:
+            if c.dialog_link_to:
+                self.link_choices.append(c.dialog_link_to)
+            self.link_choices.extend(c.getDictNotLinked([c.dialog_name, c.getDeviceLink(c.dialog_name)]))
+        else:
+            self.link_choices.extend(c.getDictNotLinked([""]))
+        
         ''' Create device name entry fields '''
-        self.Label_NAME = wx.StaticText(panel, label='Device Name:', pos=(10, 13))
+        self.label_NAME = wx.StaticText(panel, label='Device Name:', pos=(10, 13))
         if c.dialog_mode:
             self.text_NAME = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(90, 10))
         else:
@@ -48,29 +29,44 @@ class DeviceDialog(wx.Dialog):
         self.text_NAME.Bind(wx.EVT_TEXT, self.set_name)
         self.text_NAME.Bind(wx.EVT_SET_FOCUS, self.focus_name)
 
+        ''' Allow Linking device '''
+        self.label_LINK = wx.StaticText(panel, label='Link Device: ', pos=(10,38))
+        self.combo_LINK = wx.ComboBox(panel, choices=self.link_choices, style=wx.CB_READONLY, size=(145,22), pos=(90, 35))
+        self.combo_LINK.Bind(wx.EVT_COMBOBOX, self.set_link)
+
+
         ''' Create the device address entry field '''
-        self.label_IP_ADDR = wx.StaticText(panel, label='IP Address:', pos=(10, 38))
-        self.text_IP_ADDR = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(90, 35))
+        self.label_IP_ADDR = wx.StaticText(panel, label='IP Address:', pos=(10, 63))
+        self.text_IP_ADDR = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(90, 60))
         self.text_IP_ADDR.Bind(wx.EVT_TEXT, self.set_ipaddr)
         self.text_IP_ADDR.Bind(wx.EVT_SET_FOCUS, self.focus_addr)
         self.text_IP_ADDR.SetMaxLength(15)
-
-        ''' Creat the device port entry field'''
-        self.label_PORT = wx.StaticText(panel, label='Input PORT:', pos=(10, 63))
-        self.text_PORT = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(90, 60))
+        
+        
+        ''' Create the device port entry field'''
+        self.label_PORT = wx.StaticText(panel, label='Input PORT:', pos=(10, 88))
+        self.text_PORT = wx.TextCtrl(panel, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(90, 85))
         self.text_PORT.Bind(wx.EVT_TEXT, self.set_port)
         self.text_PORT.Bind(wx.EVT_SET_FOCUS, self.focus_port)
+
+        self.combo_LINK.SetSelection(0)
         
         ''' If dialog is opened in edit mode set fields '''
         if not c.dialog_mode:
             self.text_NAME.SetValue(c.dialog_name)
             self.text_IP_ADDR.SetValue(c.dialog_addr)
             self.text_PORT.SetValue(c.dialog_port)
+            if c.dialog_link_to:
+                self.combo_LINK.SetValue(c.dialog_link_to)
+            
+        
+        if len(self.link_choices) == 1:
+            self.combo_LINK.Disable()
         
         ''' Create the ok and cancel operation buttons '''
-        self.button_OK = wx.Button(panel, wx.ID_OK, label = "Okay", size = (50,20), pos = (70,95))
+        self.button_OK = wx.Button(panel, wx.ID_OK, label = "Okay", size = (50,20), pos = (70,120))
         self.button_OK.Bind(wx.EVT_BUTTON, self.okay_button)
-        self.button_CANCEL = wx.Button(panel, wx.ID_CANCEL, label = "Cancel", size = (50,20), pos = (135,95))
+        self.button_CANCEL = wx.Button(panel, wx.ID_CANCEL, label = "Cancel", size = (50,20), pos = (135,120))
         self.button_CANCEL.Bind(wx.EVT_BUTTON, self.cancel_button)
         
         
@@ -106,7 +102,16 @@ class DeviceDialog(wx.Dialog):
         self.text_NAME.ChangeValue(name) # Set value w/o triggering event
         self.text_NAME.SetInsertionPoint(index)  # Reset the inmsertion point to end
         
-    
+        
+    ''' Set the OSC  Device Link '''
+    def set_link(self, e):
+        link = self.combo_LINK.GetStringSelection()
+        if link == "Not Linked":
+            c.dialog_link_to = ""
+        else:
+            c.dialog_link_to = link
+            
+        
     ''' Set the OSC Device IP Address '''
     def set_ipaddr(self, e):
         addr = self.text_IP_ADDR.Value
@@ -136,7 +141,7 @@ class DeviceDialog(wx.Dialog):
     ''' Okay button is pressed, check values, report error or proceed '''
     def okay_button(self, e):
         if c.dialog_mode:
-            if c.dialog_name in c.config_dictionary["devices"]:
+            if c.dialog_name in c.config_dictionary["device"]:
                 self.text_NAME.SetBackgroundColour(wx.Colour(255,0,0))
                 self.Refresh()
                 self.error = 1

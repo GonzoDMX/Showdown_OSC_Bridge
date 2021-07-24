@@ -1,51 +1,28 @@
 """
-	Created by: Andrew O'Shei
-	Date: July 5, 2021
 
- 	This file is part of Showdown OSC.
-
-    Showdown OSC is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
-
-    Foobar is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with Foobar.  If not, see <https://www.gnu.org/licenses/>.
+Config file contains global variables
 
 """
-
-"""
-
-	config.py contains global variables for use
-	across different modules in Showdown OSC
-
-"""
-
 import wx
 import threading
 
 ''' Locks for thread safe accessing of variables '''
 dict_lock = threading.Lock()
 input_lock = threading.Lock()
-dcount_lock = threading.Lock()
 start_lock = threading.Lock()
 end_lock = threading.Lock()
 recvd_lock = threading.Lock()
 
 ''' Sets the UDP Server Address Values '''
 input_ip =  "127.0.0.101" # Defines the UDP Server input IP Addr
-input_port = "7001"     # Defines the UDP Server input port
+input_port = "9001"     # Defines the UDP Server input port
 device_count = 0        # Set number of available output devices
 
 
 
 ''' Thread safe access to input ip and port'''
 def getInputAddress():
+    global input_lock
     input_lock.acquire()
     global input_ip
     global input_port
@@ -55,6 +32,7 @@ def getInputAddress():
     return addr, port
 
 def setInputAddress(addr, port):
+    global input_lock
     input_lock.acquire()
     global input_ip
     global input_port
@@ -69,6 +47,7 @@ server_start = False
 end_thread = False      # Sets Flag to close UDP Server thread
 
 def getServerStart():
+    global start_lock
     start_lock.acquire()
     global server_start
     val = server_start
@@ -76,6 +55,7 @@ def getServerStart():
     return val
 
 def setServerStart(val):
+    global start_lock
     start_lock.acquire()
     global server_start
     server_start = val
@@ -83,6 +63,7 @@ def setServerStart(val):
     return
     
 def getServerEnd():
+    global end_lock
     end_lock.acquire()
     global end_thread
     val = end_thread
@@ -90,6 +71,7 @@ def getServerEnd():
     return val
 
 def setServerEnd(val):
+    global end_lock
     end_lock.acquire()
     global end_thread
     end_thread = val
@@ -97,9 +79,10 @@ def setServerEnd(val):
     return
 
 ''' Sets all input and device variables and is syncronized with JSON '''
-config_dictionary = {"input": {}, "devices": {}}
+config_dictionary = {"input": {}, "device": {}}
 
 def setDictInputs(addr, port):
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
     config_dictionary["input"]["address"] = addr
@@ -108,63 +91,130 @@ def setDictInputs(addr, port):
     return
 
 def getDictDevices():
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    dev = config_dictionary["devices"]
+    dev = config_dictionary["device"]
     dict_lock.release()
     return dev
 
-def addDevice(name, addr, port):
+def getDictDevKeys():
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    config_dictionary["devices"][name] = {"id": device_count, "address": addr, "port": port }
+    temp = []
+    for key in config_dictionary["device"]:
+        temp.append(key)
+    dict_lock.release()
+    return temp
+
+def getDictNotLinked(exclude):
+    global dict_lock
+    dict_lock.acquire()
+    global config_dictionary
+    temp = []
+    for key in config_dictionary["device"]:
+        try:
+            if key not in exclude:
+                if config_dictionary["device"][key]["linked"] == "":
+                    temp.append(key)
+        except KeyError:
+            temp.append(key)
+    dict_lock.release()
+    return temp
+
+
+def addDevice(name, link, addr, port):
+    global dict_lock
+    dict_lock.acquire()
+    global config_dictionary
+    config_dictionary["device"][name] = {"id": device_count, "address": addr, "port": port, "linked_to": link, "linked": "" }
+    if link != "":
+        config_dictionary["device"][link]["linked"] = name
     dict_lock.release()
     return
     
-def updateDevice(name, addr, port):
+def updateDevice(name, link_to, old_link_to, addr, port):
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    config_dictionary["devices"][name] = {"address": addr, "port": port }
+    dev_id = config_dictionary["device"][name]["id"]
+    link = config_dictionary["device"][name]["linked"]
+    config_dictionary["device"][name] = {"id": dev_id, "address": addr, "port": port, "linked_to": link_to, "linked":link }
+    if link_to != old_link_to:
+        if link_to != "":
+            config_dictionary["device"][link_to]["linked"] = name
+        if old_link_to != "":
+            config_dictionary["device"][old_link_to]["linked"] = ""
     dict_lock.release()
     return
 
 def getDeviceId(name):
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    i = config_dictionary["devices"][name]["id"]
+    i = config_dictionary["device"][name]["id"]
     dict_lock.release()
     return i
 
-def getDeviceAddress(name):
+def getDeviceLinkedTo(name):
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    addr = config_dictionary["devices"][name]["address"]
-    port = config_dictionary["devices"][name]["port"]
+    link_to = config_dictionary["device"][name]["linked_to"]
+    dict_lock.release()
+    return link_to
+
+def getDeviceLink(name):
+    global dict_lock
+    dict_lock.acquire()
+    global config_dictionary
+    link = config_dictionary["device"][name]["linked"]
+    dict_lock.release()
+    return link
+
+def getDeviceAddress(name):
+    global dict_lock
+    dict_lock.acquire()
+    global config_dictionary
+    addr = config_dictionary["device"][name]["address"]
+    port = config_dictionary["device"][name]["port"]
     dict_lock.release()
     return addr, port
 
 def delDevice(name):
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    del config_dictionary["devices"][name]["id"]
-    del config_dictionary["devices"][name]["address"]
-    del config_dictionary["devices"][name]["port"]
-    del config_dictionary["devices"][name]
+    link_to = config_dictionary["device"][name]["linked_to"]
+    if link_to != "":
+        config_dictionary["device"][link_to]["linked"] = ""
+    link = config_dictionary["device"][name]["linked"]
+    if link != "":
+        config_dictionary["device"][link]["linked_to"] = ""
+    del config_dictionary["device"][name]["id"]
+    del config_dictionary["device"][name]["address"]
+    del config_dictionary["device"][name]["port"]
+    del config_dictionary["device"][name]["linked"]
+    del config_dictionary["device"][name]["linked_to"]
+    del config_dictionary["device"][name]
     dict_lock.release()
     return
     
 def reorderDevice(val):
+    global dict_lock
     dict_lock.acquire()
     global config_dictionary
-    for dev in config_dictionary["devices"]:
-        if config_dictionary["devices"][dev]["id"] > val:
-            config_dictionary["devices"][dev]["id"] -= 1
+    for dev in config_dictionary["device"]:
+        if config_dictionary["device"][dev]["id"] > val:
+            config_dictionary["device"][dev]["id"] -= 1
     dict_lock.release()
     return
 
 ''' Variables for managing the Device Create/Edit dialog'''
 dialog_mode = False     # Sets Dialog mode True = Add, False = Edit
 dialog_name = ""        # Stores Device Name
+dialog_link_to = ""        # Stores Link Reference Name / Key
 dialog_addr = ""        # Stores Device Address
 dialog_port = ""        # Stores Device Port
 
@@ -173,6 +223,7 @@ recvd_on = list()              # Indexes the device that receivedd a message
 recvd_off = list()          # Lowers flag of a recvd device
 
 def getRecOnList():
+    global recvd_lock
     recvd_lock.acquire()
     global recvd_on
     l = recvd_on
@@ -180,6 +231,7 @@ def getRecOnList():
     return l
 
 def appendRecOnList(index):
+    global recvd_lock
     recvd_lock.acquire()
     global recvd_on
     recvd_on.append(index)

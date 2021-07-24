@@ -1,30 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-
 """
-    Showdown OSC
+    Showdown OSC Bridge
     Created by: Andrew O'Shei, andrewoshei.com
-    Date: July 5, 2021
-    
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 2 of the License, or
-    (at your option) any later version.
+    Date: July 4, 2021
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-"""
-
-"""
-	Showdown_OSC.py contains the main program loop and a
-	class for constructiong the main GUI in Showdown OSC
-	
 """
 
 import wx
@@ -42,7 +22,6 @@ from dialog_device import DeviceDialog
 from help_dialog import HelpDialog
 from server_udp_to_osc import UDP_To_OSC_Server
 from data_helpers import CheckIP
-from config import getRecOnList
 
 
 Disclaimer1 = "Created by: Andrew O\'Shei, andrewoshei.com"
@@ -83,71 +62,131 @@ class BuildGUI(wx.Frame):
         
         self.log_window = wx.LogWindow(self, "Showdown Log", False)
         
+        hbox = wx.BoxSizer(wx.VERTICAL)
+        
+        inbox = wx.StaticBoxSizer(wx.HORIZONTAL, pnl, "Input Configuration:")
+        
+        fgs_INPUT = wx.FlexGridSizer(2,3,5,5)
         
         ''' Create Input IP Address input field '''
-        self.Label_IN_ADDR = wx.StaticText(pnl, label='Input IP Address:', pos=(10, 13))
-        self.text_IN_ADDR = wx.TextCtrl(pnl, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(110, 10))
+        self.label_IN_ADDR = wx.StaticText(pnl, label='Input IP Address:')
+        self.text_IN_ADDR = wx.TextCtrl(pnl, style=wx.TE_PROCESS_ENTER, size=(145, 22))
         self.text_IN_ADDR.Bind(wx.EVT_TEXT, self.validate_in_ipaddr)
         self.text_IN_ADDR.Bind(wx.EVT_SET_FOCUS, self.focus_addr)
         
         ''' Create Input Port input field '''
-        self.label_IN_PORT = wx.StaticText(pnl, label='Input Port:', pos=(10, 38))
-        self.text_IN_PORT = wx.TextCtrl(pnl, style=wx.TE_PROCESS_ENTER, size=(145, 22), pos=(110, 35))
+        self.label_IN_PORT = wx.StaticText(pnl, label='Input Port:')
+        self.text_IN_PORT = wx.TextCtrl(pnl, style=wx.TE_PROCESS_ENTER, size=(145, 22))
         self.text_IN_PORT.Bind(wx.EVT_TEXT, self.validate_in_port)
         self.text_IN_PORT.Bind(wx.EVT_SET_FOCUS, self.focus_port)
 
         ''' Displays the Server Status '''
-        self.text_STATUS = wx.TextCtrl(pnl, style=wx.TE_CENTRE,size=(60,22), pos=(265,10))
+        self.text_STATUS = wx.TextCtrl(pnl, style=wx.TE_CENTRE,size=(60,22))
         self.text_STATUS.Bind(wx.EVT_SET_FOCUS, self.focus_status)
         self.text_STATUS.SetBackgroundColour(wx.Colour(255,0,0))
         self.text_STATUS.SetForegroundColour(wx.Colour(255,255,255))
         self.text_STATUS.SetValue("Offline")
 
         ''' Create button for asserting changes to the input address '''
-        self.button_SET = wx.Button(pnl, label='Set Input', size=(60,22), pos=(265, 35))
+        self.button_SET = wx.Button(pnl, label='Set Input', size=(60,22))
         self.button_SET.Bind(wx.EVT_BUTTON, self.set_input_address)
         self.button_SET.Disable()
 
+        
+        fgs_INPUT.AddMany([(self.label_IN_ADDR, 1, wx.EXPAND), 
+                           (self.text_IN_ADDR, 1, wx.EXPAND), 
+                           (self.text_STATUS, 1, wx.EXPAND), 
+                           (self.label_IN_PORT, 1, wx.EXPAND), 
+                           (self.text_IN_PORT, 1, wx.EXPAND), 
+                           (self.button_SET, 1, wx.EXPAND)])
+
+        fgs_INPUT.AddGrowableCol(1, 1)
+
+        inbox.Add(fgs_INPUT, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
+
+        sbox = wx.StaticBoxSizer(wx.VERTICAL, pnl, "Output Devices:")
+
         ''' Create the List Widget for displaying and selecting OSC Devices '''
-        self.box_OUT = wx.StaticBox(pnl, label="Output Devices:", size=(325,265), pos=(5, 65))
-        self.list_DEVICES = wx.ListCtrl(pnl, name='OSC Devices', style=wx.LC_REPORT|wx.LC_HRULES|wx.BORDER_SIMPLE|wx.LC_SINGLE_SEL, pos=(10, 85), size=(315, 200))
+        self.list_DEVICES = wx.ListCtrl(pnl, name='OSC Devices', style=wx.LC_REPORT|wx.LC_HRULES|wx.BORDER_SIMPLE|wx.LC_SINGLE_SEL)
         self.list_DEVICES.Bind(wx.EVT_LIST_ITEM_SELECTED, self.set_select)
         self.list_DEVICES.Bind(wx.EVT_LIST_ITEM_DESELECTED, self.set_select)
+        self.list_DEVICES.AppendColumn("ID", format=wx.LIST_FORMAT_LEFT, width=30)
         self.list_DEVICES.AppendColumn("OSC Device", format=wx.LIST_FORMAT_LEFT, width=130)
+        self.list_DEVICES.AppendColumn("Link", format=wx.LIST_FORMAT_LEFT, width=40)
         self.list_DEVICES.AppendColumn("IP Address", format=wx.LIST_FORMAT_LEFT, width=100)
         self.list_DEVICES.AppendColumn("Port", format=wx.LIST_FORMAT_LEFT, width=50)
         self.list_DEVICES.AppendColumn("Rx", format=wx.LIST_FORMAT_CENTER, width=30)
 
+        fgs_BUTT1 = wx.FlexGridSizer(1, 3, 5, 5)
+
         ''' Create Buttons to Add, Edit and Remove OSC Devices '''
-        self.button_ADD = wx.Button(pnl, label='Add', pos=(10, 295))
+        self.button_ADD = wx.Button(pnl, label='Add', size=(50, 30))
         self.button_ADD.Bind(wx.EVT_BUTTON, self.add_osc_device)
-        self.button_REMOVE = wx.Button(pnl, label='Remove', pos=(125, 295))
+        self.button_REMOVE = wx.Button(pnl, label='Remove', size=(50, 30))
         self.button_REMOVE.Bind(wx.EVT_BUTTON, self.remove_osc_device)
-        self.button_EDIT = wx.Button(pnl, label='Edit', pos=(238, 295))
+        self.button_EDIT = wx.Button(pnl, label='Edit', size=(50, 30))
         self.button_EDIT.Bind(wx.EVT_BUTTON, self.edit_osc_device)
 
         self.button_REMOVE.Disable()
         self.button_EDIT.Disable()
 
+        fgs_BUTT1.AddMany([(self.button_ADD, 1, wx.EXPAND), 
+                           (self.button_REMOVE, 1, wx.EXPAND), 
+                           (self.button_EDIT, 1, wx.EXPAND)])
+        
+        fgs_BUTT1.AddGrowableCol(0, 1)
+        fgs_BUTT1.AddGrowableCol(1, 1)
+        fgs_BUTT1.AddGrowableCol(2, 1)
+        
+        
+        sbox.Add(self.list_DEVICES, proportion=5, flag=wx.ALL|wx.EXPAND, border=5)
+        sbox.Add(fgs_BUTT1, proportion=0, flag=wx.ALL|wx.EXPAND, border=5)
+        
+        bbox = wx.BoxSizer(wx.HORIZONTAL)
+        
+        fgs_BUTT2 = wx.FlexGridSizer(1, 3, 5, 5)
 
         ''' Create Utility buttons'''
-        self.button_DONER = wx.Button(pnl, label='Donate', pos=(10, 335))
+        self.button_DONER = wx.Button(pnl, label='Donate', size=(50, 30))
         self.button_DONER.Bind(wx.EVT_BUTTON, self.please_donate)
-        self.button_HELP = wx.Button(pnl, label='Help', pos=(125, 335))
+        self.button_HELP = wx.Button(pnl, label='Help', size=(50, 30))
         self.button_HELP.Bind(wx.EVT_BUTTON, self.get_help)
         
         ''' Create button for opening message logger '''
-        self.button_LOG = wx.Button(pnl, label='Log', pos=(238, 335))
+        self.button_LOG = wx.Button(pnl, label='Log', size=(50, 30))
         self.button_LOG.Bind(wx.EVT_BUTTON, self.get_logger)
         
+        fgs_BUTT2.AddMany([(self.button_DONER, 1, wx.EXPAND), 
+                           (self.button_HELP, 1, wx.EXPAND), 
+                           (self.button_LOG, 1, wx.EXPAND)])
+        
+        fgs_BUTT2.AddGrowableCol(0, 1)
+        fgs_BUTT2.AddGrowableCol(1, 1)
+        fgs_BUTT2.AddGrowableCol(2, 1)
+        
+        bbox.Add(10, 0, 0)
+        bbox.Add(fgs_BUTT2, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
+        bbox.Add(10, 0, 0)
+        
+        cbox = wx.BoxSizer(wx.VERTICAL)
+        
         ''' Create App watermark '''
-        self.static_credit = wx.StaticText(pnl, label=Disclaimer1, pos=(45, 370))
-        self.static_message = wx.StaticText(pnl, label=Disclaimer2, pos=(35, 385))
+        credit1 = wx.StaticText(pnl, label=Disclaimer1, style=wx.ALIGN_CENTER)
+        credit2 = wx.StaticText(pnl, label=Disclaimer2, style=wx.ALIGN_CENTER)
+        
+        cbox.Add(credit1, proportion=0, flag=wx.ALL|wx.EXPAND, border=0)
+        cbox.Add(credit2, proportion=0, flag=wx.ALL|wx.EXPAND, border=0)
+        
+        
+        hbox.Add(inbox, proportion=0, flag=wx.ALL|wx.EXPAND, border=5)
+        hbox.Add(sbox, proportion=1, flag=wx.ALL|wx.EXPAND, border=5)
+        hbox.Add(bbox, proportion=0, flag=wx.ALL|wx.EXPAND, border=0)
+        hbox.Add(cbox, proportion=0, flag=wx.ALL|wx.EXPAND, border=5)
+        pnl.SetSizer(hbox)
         
         ''' Set main frame size and params '''
-        self.SetSize((350, 450))
-        self.SetMinSize((350, 450))
-        self.SetMaxSize((350, 450))
+        self.SetSize((430, 495))
+        self.SetMinSize((430, 495))
         self.SetTitle('Showdown OSC Bridge')
         self.Centre()
         self.Show(True)
@@ -164,10 +203,20 @@ class BuildGUI(wx.Frame):
                 c.input_port = c.config_dictionary["input"]["port"]
                 self.text_IN_ADDR.SetValue(c.input_ip)
                 self.text_IN_PORT.SetValue(c.input_port)
-                for count, key in enumerate(c.config_dictionary["devices"]):
-                    self.list_DEVICES.InsertItem(count, key)
-                    self.list_DEVICES.SetItem(count, 1, c.config_dictionary["devices"][key]["address"])
-                    self.list_DEVICES.SetItem(count, 2, c.config_dictionary["devices"][key]["port"])
+                for count, key in enumerate(c.config_dictionary["device"]):
+                    link_to = c.config_dictionary["device"][key]["linked_to"]
+                    self.list_DEVICES.InsertItem(count, str(c.config_dictionary["device"][key]["id"]))
+                    self.list_DEVICES.SetItem(count, 1, key)
+                    try:
+                        if link_to:
+                            self.list_DEVICES.SetItem(count, 2, str(c.config_dictionary["device"][link_to]["id"]))
+                        else:
+                            self.list_DEVICES.SetItem(count, 2, "")
+                    # For backwards compatibility
+                    except KeyError:
+                        self.list_DEVICES.SetItem(count, 2, "")
+                    self.list_DEVICES.SetItem(count, 3, c.config_dictionary["device"][key]["address"])
+                    self.list_DEVICES.SetItem(count, 4, c.config_dictionary["device"][key]["port"])
                     c.device_count += 1
                 c.thread_server = Launch_Server_Thread()
         except Exception as e:
@@ -229,11 +278,11 @@ class BuildGUI(wx.Frame):
         r_on = c.getRecOnList()
         ''' Turn flag on '''
         while c.recvd_off:
-            self.list_DEVICES.SetItem(c.recvd_off.pop(), 3, "")
+            self.list_DEVICES.SetItem(c.recvd_off.pop(), 5, "")
         ''' Turn flag off '''
         while r_on:
             i = r_on.pop()
-            self.list_DEVICES.SetItem(i, 3, "●")
+            self.list_DEVICES.SetItem(i, 5, "●")
             c.recvd_off.append(i)
         return
         
@@ -243,9 +292,19 @@ class BuildGUI(wx.Frame):
         self.list_DEVICES.DeleteAllItems()
         devDict = c.getDictDevices()
         for count, key in enumerate(devDict):
-            self.list_DEVICES.InsertItem(count, key)
-            self.list_DEVICES.SetItem(count, 1, devDict[key]["address"])
-            self.list_DEVICES.SetItem(count, 2, devDict[key]["port"])
+            link_to = c.config_dictionary["device"][key]["linked_to"]
+            self.list_DEVICES.InsertItem(count, str(c.config_dictionary["device"][key]["id"]))
+            self.list_DEVICES.SetItem(count, 1, key)
+            try:
+                if link_to:
+                    self.list_DEVICES.SetItem(count, 2, str(c.config_dictionary["device"][link_to]["id"]))
+                else:
+                    self.list_DEVICES.SetItem(count, 2, "")
+            # For backwards compatibility
+            except KeyError:
+                self.list_DEVICES.SetItem(count, 2, "")
+            self.list_DEVICES.SetItem(count, 3, devDict[key]["address"])
+            self.list_DEVICES.SetItem(count, 4, devDict[key]["port"])
 
 
     ''' Validates IP Address value is valid'''
@@ -318,6 +377,7 @@ class BuildGUI(wx.Frame):
     """ Opens a dialog for adding an OSC Device """
     def add_osc_device(self, e):
         c.dialog_mode = True
+        c.dialog_link_to = ""
         with DeviceDialog(self, "Add OSC Device") as dialog:
             if dialog.ShowModal() == wx.ID_OK:
                 self.add_device_dict()
@@ -332,7 +392,7 @@ class BuildGUI(wx.Frame):
         index = self.list_DEVICES.GetFocusedItem()
         if index > -1:
             if self.list_DEVICES.IsSelected(index):
-                name = self.list_DEVICES.GetItemText(index)
+                name = self.list_DEVICES.GetItemText(index, 1)
                 dialog_remove = wx.MessageDialog(
                     None,
                     'Remove device \"' + name + '\" ?',
@@ -344,9 +404,9 @@ class BuildGUI(wx.Frame):
                     c.delDevice(name)
                     if del_id < c.device_count:
                         c.reorderDevice(del_id)
-                        for dev in c.config_dictionary["devices"]:
-                            if c.config_dictionary["devices"][dev]["id"] > del_id:
-                                c.config_dictionary["devices"][dev]["id"] -= 1
+                        for dev in c.config_dictionary["device"]:
+                            if c.config_dictionary["device"][dev]["id"] > del_id:
+                                c.config_dictionary["device"][dev]["id"] -= 1
                     c.device_count -= 1
                     self.save_device_dict()
                     self.update_device_list()
@@ -365,15 +425,19 @@ class BuildGUI(wx.Frame):
         index = self.list_DEVICES.GetFocusedItem()
         if index > -1:
             if self.list_DEVICES.IsSelected(index):
-                name = self.list_DEVICES.GetItemText(index)
+                name = self.list_DEVICES.GetItemText(index, 1)
+                old_link_to = c.getDeviceLinkedTo(name)
                 c.dialog_name = name
+                c.dialog_link_to = old_link_to
                 c.dialog_addr, c.dialog_port = c.getDeviceAddress(name)
                 with DeviceDialog(self, "Edit OSC Device") as dialog:
                     if dialog.ShowModal() == wx.ID_OK:
-                        self.update_device_dict()
+                        self.update_device_dict(old_link_to)
                         self.update_device_list()
                         wx.LogStatus("Edited device: " + c.dialog_name + "/" + 
                              c.dialog_addr + ":" + c.dialog_port)
+                        if c.dialog_link_to:
+                            wx.LogStatus("Device Linked to: " + c.dialog_link_to)
                         c.setServerEnd(True)
         self.button_REMOVE.Disable()
         self.button_EDIT.Disable()
@@ -382,12 +446,12 @@ class BuildGUI(wx.Frame):
     ''' Add new device to dictionary '''
     def add_device_dict(self):
         c.device_count += 1
-        c.addDevice(c.dialog_name, c.dialog_addr, c.dialog_port)
+        c.addDevice(c.dialog_name, c.dialog_link_to, c.dialog_addr, c.dialog_port)
         self.save_device_dict()
 
     ''' Edit new device to dictionary '''
-    def update_device_dict(self):
-        c.updateDevice(c.dialog_name, c.dialog_addr, c.dialog_port)
+    def update_device_dict(self, old_link_to):
+        c.updateDevice(c.dialog_name, c.dialog_link_to, old_link_to, c.dialog_addr, c.dialog_port)
         self.save_device_dict()
         
         
